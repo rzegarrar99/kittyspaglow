@@ -5,39 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Spa Glow Kitty - Enterprise</title>
   
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            primary: '#FF2A7A',
-            secondary: '#FFB6C1',
-            accent: '#D4AF37',
-            surface: '#FFFFFF',
-            background: '#FFF0F5',
-            plum: '#2D1B2E',
-          },
-          fontFamily: {
-            sans: ['Nunito', 'sans-serif'],
-          },
-          boxShadow: {
-            'coquette': '0 10px 40px -10px rgba(255, 42, 122, 0.08)',
-            'glass': '0 8px 32px 0 rgba(255, 42, 122, 0.05)',
-            'glow': '0 0 20px rgba(255, 42, 122, 0.15)',
-          },
-          borderRadius: {
-            '4xl': '2rem',
-          }
-        }
-      }
-    }
-  </script>
-
+  <!-- POLÍTICA DE SEGURIDAD DE CONTENIDO (CSP) -->
+  <!-- 1. default-src: Solo origen local -->
+  <!-- 2. script-src: Scripts locales y SDKs de Google/Firebase -->
+  <!-- 3. connect-src: APIs de Firebase y wss: para sincronización en tiempo real (WebSockets) -->
+  <!-- 4. style-src: Requerido por Tailwind CSS y Framer Motion -->
+  <!-- 5. img-src: Avatares de Google y procesamiento de imágenes -->
+  <!-- 6. font-src: Fuentes locales únicamente -->
+  <!-- 7. frame-src: Dominio de Auth (Crítico para el flujo de Login) -->
+  <!-- 8. object-src: Bloqueo de plugins externos -->
+  <!-- 9. base-uri: Protección contra secuestro de base URL -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://apis.google.com https://www.gstatic.com https://www.googletagmanager.com; connect-src 'self' wss: https://identitytoolkit.googleapis.com https://firestore.googleapis.com https://firebase.googleapis.com https://securetoken.googleapis.com https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://lh3.googleusercontent.com; font-src 'self'; frame-src 'self' https://kitty-spa-5bc3b.firebaseapp.com; object-src 'none'; base-uri 'self';">
   <style>
     body {
       background-color: #FFF0F5;
@@ -55,5 +33,5 @@
 <body>
   <div id="root"></div>
   <script type="module" src="./index.tsx"></script>
-<script type="module" src="/index.js"></script></body>
+</body>
 </html>

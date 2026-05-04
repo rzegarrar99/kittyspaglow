@@ -7,6 +7,8 @@ import { serviceService } from '../services/service.service';
 import { clientService } from '../services/client.service';
 import { Client, Service, Staff, Order, Movement, InventoryItem, Role, SimpleDictionary, Brand, Unit, Area, Supplier, Purchase, CashRegister, KardexEntry, PaymentDetail } from '../types';
 
+const log = import.meta.env.DEV ? console.log : () => {};
+
 export const useGenericMutation = <T extends { id: string }>(queryKey: string, service: any) => {
   const queryClient = useQueryClient();
   
@@ -22,19 +24,26 @@ export const useGenericMutation = <T extends { id: string }>(queryKey: string, s
 
   const deleteMutation = useMutation<void, Error, string>({
     mutationFn: (id: string) => service.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: [queryKey] }),
+    onSuccess: (data, variables) => {
+      log(`[useGenericMutation - ${queryKey}] ✅ Eliminación exitosa para ID: ${variables}. Invalidando caché.`);
+      queryClient.invalidateQueries({ queryKey: [queryKey] });
+    },
   });
 
   return { addMutation, updateMutation, deleteMutation };
 };
 
 export const useCrud = <T extends { id: string }>(queryKey: string, service: any) => {
-  const { data, isLoading: loading } = useQuery<T[]>({ queryKey: [queryKey], queryFn: service.getAll });
+  const { data, isLoading: loading, refetch } = useQuery<T[]>({ queryKey: [queryKey], queryFn: service.getAll });
+  if (data && !loading) {
+    log(`[useCrud - ${queryKey}] 📊 Datos sincronizados:`, data.length, "registros.");
+  }
   const { addMutation, updateMutation, deleteMutation } = useGenericMutation<T>(queryKey, service);
 
   return {
     data: data || [],
     loading,
+    refetch,
     addItem: addMutation.mutateAsync,
     updateItem: (id: string, updates: Partial<T>) => updateMutation.mutateAsync({ id, updates }),
     deleteItem: deleteMutation.mutateAsync,
@@ -57,6 +66,7 @@ export const useServices = () => {
   return {
     services: crud.data,
     loading: crud.loading,
+    refetch: crud.refetch,
     addService: crud.addItem,
     updateService: crud.updateItem,
     deleteService: crud.deleteItem,
@@ -68,6 +78,7 @@ export const useStaff = () => {
   return {
     staff: crud.data,
     loading: crud.loading,
+    refetch: crud.refetch,
     addStaff: crud.addItem,
     updateStaff: crud.updateItem,
     deleteStaff: crud.deleteItem,
@@ -79,6 +90,7 @@ export const useClients = () => {
   return {
     clients: crud.data,
     loading: crud.loading,
+    refetch: crud.refetch,
     addClient: crud.addItem,
     updateClient: crud.updateItem,
     deleteClient: crud.deleteItem,

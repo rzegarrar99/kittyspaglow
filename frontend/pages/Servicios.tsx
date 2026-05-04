@@ -4,6 +4,9 @@ import { Plus, Sparkles, Clock, Trash2, Edit } from 'lucide-react';
 import { useServices, useCategories } from '../hooks/useQueries';
 import { useToast } from '../contexts/ToastContext';
 import { Service } from '../types';
+import { ConfirmModal } from '../components/shared/ConfirmModal';
+import { usePagination } from '../hooks/usePagination';
+import { Pagination } from '../components/shared/Pagination';
 
 export const Servicios: React.FC = () => {
   const { services, loading, addService, updateService, deleteService } = useServices();
@@ -12,6 +15,8 @@ export const Servicios: React.FC = () => {
   
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [editingService, setEditingService] = useState<Service | null>(null);
   
   const [formData, setFormData] = useState({ name: '', category: '', price: '', duration: '' });
@@ -20,6 +25,8 @@ export const Servicios: React.FC = () => {
     service.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     service.category.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const { paginated, currentPage, totalPages, setCurrentPage, total } = usePagination(filteredServices, 10);
 
   const openModal = (service?: Service) => {
     if (service) {
@@ -62,11 +69,14 @@ export const Servicios: React.FC = () => {
     setIsModalOpen(false);
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('¿Estás segura de eliminar este servicio?')) {
-      await deleteService(id);
-      addToast('Servicio eliminado.', 'success');
-    }
+  const handleDelete = (id: string) => {
+    setDeleteTargetId(id);
+    setConfirmOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (deleteTargetId) await deleteService(deleteTargetId);
+    setDeleteTargetId(null);
   };
 
   return (
@@ -96,7 +106,7 @@ export const Servicios: React.FC = () => {
               <Th className="text-right pr-6">Acciones</Th>
             </Thead>
             <Tbody>
-              {filteredServices.map((service, idx) => (
+              {paginated.map((service, idx) => (
                 <Tr key={service.id} index={idx}>
                   <Td className="pl-6">
                     <div className="flex items-center gap-3">
@@ -131,6 +141,13 @@ export const Servicios: React.FC = () => {
           </Table>
         )}
       </Card>
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        total={total}
+        onPageChange={setCurrentPage}
+        pageSize={10}
+      />
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingService ? "Editar Servicio" : "Crear Nuevo Servicio"}>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -151,6 +168,17 @@ export const Servicios: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      <ConfirmModal
+        isOpen={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Eliminar servicio"
+        message="¿Estás segura de eliminar este servicio? Esta acción no se puede deshacer."
+        confirmText="Sí, eliminar"
+        cancelText="Cancelar"
+        isDestructive={true}
+      />
     </div>
   );
 };

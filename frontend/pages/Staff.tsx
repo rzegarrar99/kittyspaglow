@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Card, Button, Spinner, Modal, Badge, PageHeader, FormInput, Table, Thead, Tbody, Tr, Th, Td } from '../components/UI';
-import { UserPlus, Check, Trash2, Edit, KeyRound } from 'lucide-react';
+import { UserPlus, Check, Trash2, Edit, KeyRound, AlertTriangle } from 'lucide-react';
 import { useStaff, useRoles } from '../hooks/useQueries';
 import { useToast } from '../contexts/ToastContext';
 import { useAuthStore } from '../stores/authStore';
@@ -9,14 +9,23 @@ import { motion } from 'framer-motion';
 import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { env, isFirebaseConfigured } from '../config/env';
+import { useQueryClient } from '@tanstack/react-query';
+import { usePagination } from '../hooks/usePagination';
+import { Pagination } from '../components/shared/Pagination';
 
+// 🚨 NOTA: Si hay un error en la desestructuración de 'refetch' aquí,
+// asegúrate de que tu archivo 'frontend/hooks/useQueries.ts' esté actualizado
+// y que tu compilador de TypeScript haya recargado los hooks.
 export const Staff: React.FC = () => {
-  const { staff, loading, addStaff, updateStaff, deleteStaff } = useStaff();
+  const { staff, loading, addStaff, updateStaff, deleteStaff, refetch } = useStaff();
   const { data: roles = [] } = useRoles();
   const { addToast } = useToast();
+  const queryClient = useQueryClient();
   const hasPermission = useAuthStore(state => state.hasPermission);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [staffToDelete, setStaffToDelete] = useState<StaffType | null>(null);
   const [editingStaff, setEditingStaff] = useState<StaffType | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   
@@ -29,7 +38,9 @@ export const Staff: React.FC = () => {
     roles: []
   });
 
-  const openModal = (member?: StaffType) => {
+  const { paginated: paginatedStaff, currentPage, totalPages, setCurrentPage, total } = usePagination(staff, 10);
+
+  const openModal = useCallback((member?: StaffType) => {
     if (member) {
       setEditingStaff(member);
       setFormData({
@@ -45,7 +56,7 @@ export const Staff: React.FC = () => {
       setFormData({ name: '', username: '', email: '', password: '', commission_rate: '0', roles: [] });
     }
     setIsModalOpen(true);
-  };
+  }, []);
 
   const toggleRole = (role: Role) => {
     const hasRole = formData.roles.find(r => r.id === role.id);
@@ -58,6 +69,13 @@ export const Staff: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // 🛡️ Validación Enterprise: Integridad de Datos
+    if (formData.roles.length === 0) {
+      addToast('Error: Es obligatorio asignar al menos un rol al usuario. 🎀', 'error');
+      return;
+    }
+
     setIsProcessing(true);
     
     try {
@@ -82,7 +100,7 @@ export const Staff: React.FC = () => {
           await signOut(secondaryAuth);
 
           // Guardamos en Firestore usando el UID generado
-          await addStaff({
+           await addStaff({ // Ahora addStaff usará el método createWithId si el ID está presente
             id: userCredential.user.uid,
             name: formData.name,
             username: formData.username,
@@ -112,26 +130,65 @@ export const Staff: React.FC = () => {
         };
 
         if (editingStaff) {
+          // 🛡️ Lógica Enterprise: updateStaff ahora usa el ID correcto (UID)
+          // La lógica de reparación de "No document to update" se maneja en el catch principal
+          // si el update falla, y el addStaff lo creará con el ID correcto.
           await updateStaff(editingStaff.id, payload);
           addToast(`Perfil de ${formData.name} actualizado 🎀`, 'success');
         } else {
-          await addStaff(payload as any);
+          await addStaff(payload as any); // Esto ahora usará createWithId si el payload tiene 'id'
           addToast('Nuevo miembro agregado al equipo 🎀', 'success');
         }
       }
+      
+      // 🛡️ Sincronización Enterprise: Refrescamos la lista antes de cerrar el modal
+      if (refetch) await refetch();
+      
       setIsModalOpen(false);
     } catch (error: any) {
-      console.error(error);
-      addToast(error.message || 'Error al guardar el personal.', 'error');
+      let msg = error.message || 'Error al guardar el personal.';
+      if (error.code === 'permission-denied') {
+        msg = 'No tienes permisos en Firebase para modificar este registro. Revisa las Reglas de Firestore. 🔒';
+      } else if (error.message?.includes('No document to update') && editingStaff) {
+        // Este caso debería ser manejado por el upsert, pero si llega aquí, es un error más profundo.
+        msg = `Error: El documento para ${editingStaff.name} no se encontró. Intenta crear uno nuevo o contacta soporte.`;
+      }
+      addToast(msg, 'error');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('¿Estás segura de eliminar a este miembro del equipo?')) {
-      await deleteStaff(id);
-      addToast('Miembro eliminado.', 'success');
+  const openDeleteModal = useCallback((member: StaffType) => {
+    setStaffToDelete(member);
+    setIsDeleteModalOpen(true);
+  }, []);
+
+  const confirmDelete = async () => {
+    if (!staffToDelete) return;
+    const idToRemove = staffToDelete.id;
+    setIsProcessing(true);
+    
+    try {
+      // 🛡️ Flujo Enterprise: Esperamos la confirmación real de la DB antes de actualizar UI
+      await deleteStaff(idToRemove);
+      
+      // Invalidamos y refrescamos antes de cerrar
+      await queryClient.invalidateQueries({ queryKey: ['staff'] });
+      if (refetch) await refetch();
+
+      addToast(`Miembro ${staffToDelete.name} eliminado correctamente 🎀`, 'success');
+      setIsDeleteModalOpen(false);
+    } catch (error: any) {
+      const msg = error.code === 'permission-denied'
+        ? 'No tienes permiso para eliminar. Revisa las Reglas de Firestore (debe incluir "delete"). 🔒'
+        : error.message?.includes('not-found')
+          ? 'El registro ya no existe en la base de datos.'
+          : 'Ocurrió un problema inesperado al eliminar.';
+      addToast(msg, 'error');
+    } finally {
+      setIsProcessing(false);
+      setStaffToDelete(null);
     }
   };
 
@@ -154,12 +211,15 @@ export const Staff: React.FC = () => {
               <Th className="text-right pr-6">Acciones</Th>
             </Thead>
             <Tbody>
-              {staff.map((member, idx) => {
+              {/* 🛡️ Auditoría Enterprise: Eliminamos el filtro de duplicados. 
+                  Si hay 7 registros en la DB, el administrador DEBE ver los 7 para poder limpiar los duplicados. */}
+              {paginatedStaff
+                .map((member, idx) => {
                 const sortedRoles = [...member.roles].sort((a, b) => b.priority - a.priority);
                 const highestRole = sortedRoles[0];
                 
                 return (
-                  <Tr key={member.id} index={idx}>
+                  <Tr key={`${member.id}-${idx}`} index={idx}>
                     <Td className="pl-6">
                       <div className="flex items-center gap-4">
                         <img 
@@ -197,7 +257,7 @@ export const Staff: React.FC = () => {
                         <button onClick={() => openModal(member)} className="p-2 text-plum/40 hover:text-primary hover:bg-white rounded-full transition-all">
                           <Edit className="w-4 h-4" />
                         </button>
-                        <button onClick={() => handleDelete(member.id)} className="p-2 text-red-400 hover:text-red-600 hover:bg-white rounded-full transition-all">
+                        <button onClick={() => openDeleteModal(member)} className="p-2 text-red-400 hover:text-red-600 hover:bg-white rounded-full transition-all">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -209,6 +269,7 @@ export const Staff: React.FC = () => {
           </Table>
         )}
       </Card>
+      <Pagination currentPage={currentPage} totalPages={totalPages} total={total} onPageChange={setCurrentPage} />
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingStaff ? "Editar Miembro" : "Nuevo Miembro del Equipo"} maxWidth="max-w-2xl">
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -231,7 +292,14 @@ export const Staff: React.FC = () => {
           <div className="border-t border-white/50 pt-4">
             <label className="block text-sm font-extrabold text-plum mb-3 uppercase tracking-wider">Asignar Roles</label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {roles.map(role => {
+              {roles.length === 0 ? (
+                <div className="sm:col-span-2 p-6 bg-red-50/50 border-2 border-dashed border-red-200 rounded-[2rem] text-center animate-pulse">
+                  <AlertTriangle className="w-8 h-8 text-red-500 mx-auto mb-2" />
+                  <p className="text-red-700 font-black text-xs uppercase tracking-tight">Acción Requerida</p>
+                  <p className="text-red-600 text-[10px] mt-1 font-bold leading-tight">No puedes crear personal porque no existen roles. Ve al módulo de <strong>Roles</strong> y crea uno (ej. "Administradora") primero.</p>
+                </div>
+              ) : (
+                roles.map(role => {
                 const isSelected = formData.roles.some(r => r.id === role.id);
                 return (
                   <div 
@@ -253,7 +321,8 @@ export const Staff: React.FC = () => {
                     </div>
                   </div>
                 );
-              })}
+              })
+              )}
             </div>
           </div>
 
@@ -264,6 +333,31 @@ export const Staff: React.FC = () => {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* 🎀 UX Senior: Modal de Confirmación de Eliminación */}
+      <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title="Confirmar Eliminación">
+        <div className="text-center space-y-6">
+          <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto bg-red-50 text-red-500 border-4 border-white shadow-sm">
+            <AlertTriangle className="w-10 h-10" />
+          </div>
+          <div>
+            <p className="text-plum/80 font-bold text-lg">¿Estás segura de eliminar a este miembro?</p>
+            <p className="text-plum/50 text-sm font-semibold mt-1">
+              Esta acción eliminará el perfil de <strong>{staffToDelete?.name}</strong>. El acceso a su cuenta será revocado en la base de datos.
+            </p>
+          </div>
+          <div className="flex gap-4 justify-center pt-4">
+            <Button variant="ghost" onClick={() => setIsDeleteModalOpen(false)}>Cancelar</Button>
+            <Button 
+              className="bg-gradient-to-r from-red-500 to-red-400 shadow-lg text-white" 
+              onClick={confirmDelete}
+              disabled={isProcessing}
+            >
+              {isProcessing ? <Spinner size="sm" /> : "Eliminar Perfil"}
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

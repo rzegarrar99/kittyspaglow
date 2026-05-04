@@ -17,8 +17,8 @@ const firebaseConfig = {
 // Inicializamos Firebase
 export const app = isFirebaseConfigured ? initializeApp(firebaseConfig) : null;
 
-// ⚠️ CORRECCIÓN CRÍTICA: Le decimos a Firestore que use la base de datos "spaglowkittywost"
-export const db = isFirebaseConfigured ? getFirestore(app!, "spaglowkittywost") : null as any;
+// 🎀 OPTIMIZACIÓN: Usamos la base de datos por defecto para evitar errores de conexión
+export const db = isFirebaseConfigured ? getFirestore(app!) : null as any;
 
 export const auth = isFirebaseConfigured ? getAuth(app!) : null as any;
 

@@ -5,6 +5,8 @@ import { useOrders, useStaff } from '../hooks/useQueries';
 import { exportToCSV } from '../utils/exportUtils';
 import { KittyIcon } from '../components/KittyIcon';
 import { motion } from 'framer-motion';
+import { usePagination } from '../hooks/usePagination';
+import { Pagination } from '../components/shared/Pagination';
 
 export const Comisiones: React.FC = () => {
   const { orders } = useOrders();
@@ -26,6 +28,8 @@ export const Comisiones: React.FC = () => {
       };
     }).sort((a, b) => b.commission - a.commission);
   }, [orders, staff]);
+
+  const { paginated: paginatedCommissions, currentPage, totalPages, setCurrentPage, total } = usePagination(commissionsData, 10);
 
   const topStaff = commissionsData.length > 0 && commissionsData[0].commission > 0 ? commissionsData[0] : null;
 
@@ -73,7 +77,7 @@ export const Comisiones: React.FC = () => {
       )}
 
       <Card className="p-0 overflow-hidden">
-        {commissionsData.length === 0 ? (
+        {total === 0 ? (
           <EmptyState message="No hay datos de staff registrados." />
         ) : (
           <div className="overflow-x-auto">
@@ -89,7 +93,7 @@ export const Comisiones: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-pink-50">
-                {commissionsData.map((s, idx) => (
+                {paginatedCommissions.map((s, idx) => (
                   <motion.tr 
                     key={s.id} 
                     initial={{ opacity: 0, x: -20 }} 
@@ -116,6 +120,9 @@ export const Comisiones: React.FC = () => {
           </div>
         )}
       </Card>
+      <div className="p-4">
+        <Pagination currentPage={currentPage} totalPages={totalPages} total={total} onPageChange={setCurrentPage} />
+      </div>
     </div>
   );
 };

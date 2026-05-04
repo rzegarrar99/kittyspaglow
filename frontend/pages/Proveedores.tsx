@@ -5,10 +5,14 @@ import { useToast } from '../contexts/ToastContext';
 import { CrudPage } from '../components/shared/CrudPage';
 import { FormInput } from '../components/UI';
 import { Supplier } from '../types';
+import { usePagination } from '../hooks/usePagination';
+import { Pagination } from '../components/shared/Pagination';
 
 export const Proveedores: React.FC = () => {
   const { data, loading, addItem, updateItem, deleteItem } = useSuppliers();
   const { addToast } = useToast();
+
+  const { paginated, currentPage, totalPages, setCurrentPage, total } = usePagination(data, 10);
 
   const handleAdd = async (formData: any) => {
     await addItem(formData);
@@ -26,12 +30,13 @@ export const Proveedores: React.FC = () => {
   };
 
   return (
+    <>
     <CrudPage<Supplier>
       title="Proveedores"
       subtitle="Directorio de proveedores del spa."
       icon={Truck}
       itemName="Proveedor"
-      data={data}
+      data={paginated}
       loading={loading}
       searchKeys={['name', 'ruc', 'email']}
       onAdd={handleAdd}
@@ -86,5 +91,13 @@ export const Proveedores: React.FC = () => {
         </>
       )}
     />
+    <Pagination
+      currentPage={currentPage}
+      totalPages={totalPages}
+      total={total}
+      onPageChange={setCurrentPage}
+      pageSize={10}
+    />
+    </>
   );
 };

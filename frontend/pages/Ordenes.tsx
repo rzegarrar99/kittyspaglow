@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { Card, Badge, EmptyState, Modal, Button, PageHeader, SearchBar, Table, Thead, Tbody, Tr, Th, Td } from '../components/UI';
-import { ClipboardList, MapPin, Eye, Printer, Banknote, CreditCard, Landmark } from 'lucide-react';
+import { ClipboardList, MapPin, Eye, Printer, Banknote, CreditCard, Landmark, QrCode } from 'lucide-react';
 import { useOrders, useClients, useStaff, useAreas } from '../hooks/useQueries';
 import { useSettings } from '../contexts/SettingsContext';
 import { Order } from '../types';
 import { printTicket } from '../utils/exportUtils';
 import { YapeIcon, PlinIcon } from '../components/PaymentIcons';
+import { usePagination } from '../hooks/usePagination';
+import { Pagination } from '../components/shared/Pagination';
 
 export const Ordenes: React.FC = () => {
   const { orders } = useOrders();
@@ -27,6 +29,8 @@ export const Ordenes: React.FC = () => {
     return clientName.includes(search) || orderId.includes(search);
   });
 
+  const { paginated: paginatedOrders, currentPage, totalPages, setCurrentPage, total } = usePagination(filteredOrders, 10);
+
   const handlePrint = () => {
     if (viewingOrder) {
       printTicket(
@@ -42,8 +46,9 @@ export const Ordenes: React.FC = () => {
   const getPaymentIcon = (method: string) => {
     switch (method) {
       case 'Efectivo': return <Banknote className="w-3 h-3" />;
-      case 'Yape': return <YapeIcon className="w-3 h-3" />;
-      case 'Plin': return <PlinIcon className="w-3 h-3" />;
+      case 'Yape/Plin':
+      case 'Yape':
+      case 'Plin': return <QrCode className="w-3 h-3 text-primary" />;
       case 'Tarjeta': return <CreditCard className="w-3 h-3" />;
       case 'Transferencia': return <Landmark className="w-3 h-3" />;
       default: return null;
@@ -62,7 +67,7 @@ export const Ordenes: React.FC = () => {
           <SearchBar value={searchTerm} onChange={setSearchTerm} placeholder="Buscar por clienta o ID de orden..." />
         </div>
 
-        {filteredOrders.length === 0 ? (
+        {paginatedOrders.length === 0 && total === 0 ? (
           <EmptyState message="No se encontraron órdenes." />
         ) : (
           <Table>
@@ -76,7 +81,7 @@ export const Ordenes: React.FC = () => {
               <Th className="text-right pr-6">Acciones</Th>
             </Thead>
             <Tbody>
-              {filteredOrders.map((order, idx) => (
+              {paginatedOrders.map((order, idx) => (
                 <Tr key={order.id} index={idx}>
                   <Td className="pl-6 font-bold text-plum/70">
                     <div className="flex items-center gap-3">
@@ -112,6 +117,7 @@ export const Ordenes: React.FC = () => {
           </Table>
         )}
       </Card>
+      <Pagination currentPage={currentPage} totalPages={totalPages} total={total} onPageChange={setCurrentPage} />
 
       <Modal isOpen={!!viewingOrder} onClose={() => setViewingOrder(null)} title={`Detalles de Orden #${viewingOrder?.id.slice(-6)}`}>
         {viewingOrder && (

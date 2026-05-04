@@ -5,10 +5,14 @@ import { useToast } from '../contexts/ToastContext';
 import { CrudPage } from '../components/shared/CrudPage';
 import { FormInput, Badge } from '../components/UI';
 import { Brand } from '../types';
+import { usePagination } from '../hooks/usePagination';
+import { Pagination } from '../components/shared/Pagination';
 
 export const Marcas: React.FC = () => {
   const { data, loading, addItem, updateItem, deleteItem } = useBrands();
   const { addToast } = useToast();
+
+  const { paginated, currentPage, totalPages, setCurrentPage, total } = usePagination(data, 10);
 
   const handleAdd = async (formData: any) => {
     await addItem(formData);
@@ -26,12 +30,13 @@ export const Marcas: React.FC = () => {
   };
 
   return (
+    <>
     <CrudPage<Brand>
       title="Marcas"
       subtitle="Marcas de productos utilizados en el spa."
       icon={Tags}
       itemName="Marca"
-      data={data}
+      data={paginated}
       loading={loading}
       searchKeys={['name', 'description', 'origin']}
       onAdd={handleAdd}
@@ -67,5 +72,13 @@ export const Marcas: React.FC = () => {
         </>
       )}
     />
+    <Pagination
+      currentPage={currentPage}
+      totalPages={totalPages}
+      total={total}
+      onPageChange={setCurrentPage}
+      pageSize={10}
+    />
+    </>
   );
 };

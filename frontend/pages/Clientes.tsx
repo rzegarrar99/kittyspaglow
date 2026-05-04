@@ -5,6 +5,9 @@ import { useClients, useOrders } from '../hooks/useQueries';
 import { useToast } from '../contexts/ToastContext';
 import { Client } from '../types';
 import { motion } from 'framer-motion';
+import { ConfirmModal } from '../components/shared/ConfirmModal';
+import { usePagination } from '../hooks/usePagination';
+import { Pagination } from '../components/shared/Pagination';
 
 export const Clientes: React.FC = () => {
   const { clients, loading, addClient, updateClient, deleteClient } = useClients();
@@ -12,14 +15,24 @@ export const Clientes: React.FC = () => {
   const { addToast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   
-  const [formData, setFormData] = useState({ name: '', dni: '', phone: '', email: '', status: 'Activo' as const });
+  const [formData, setFormData] = useState<{
+    name: string;
+    dni: string;
+    phone: string;
+    email: string;
+    status: Client['status'];
+  }>({ name: '', dni: '', phone: '', email: '', status: 'Activo' });
 
   const filteredClients = clients.filter(client => 
     client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     client.dni.includes(searchTerm)
   );
+
+  const { paginated, currentPage, totalPages, setCurrentPage, total } = usePagination(filteredClients, 10);
 
   const openModal = (client?: Client) => {
     if (client) {
@@ -50,11 +63,14 @@ export const Clientes: React.FC = () => {
     setIsModalOpen(false);
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('¿Estás segura de eliminar a esta clienta?')) {
-      await deleteClient(id);
-      addToast('Clienta eliminada.', 'success');
-    }
+  const handleDelete = (id: string) => {
+    setDeleteTargetId(id);
+    setConfirmOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (deleteTargetId) await deleteClient(deleteTargetId);
+    setDeleteTargetId(null);
   };
 
   const getClientCRMData = (clientId: string, defaultLastVisit: string) => {
@@ -100,7 +116,7 @@ export const Clientes: React.FC = () => {
               <Th className="text-right pr-6">Acciones</Th>
             </Thead>
             <Tbody>
-              {filteredClients.map((client, idx) => {
+              {paginated.map((client, idx) => {
                 const crmData = getClientCRMData(client.id, client.lastVisit);
                 
                 return (
@@ -152,6 +168,13 @@ export const Clientes: React.FC = () => {
           </Table>
         )}
       </Card>
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        total={total}
+        onPageChange={setCurrentPage}
+        pageSize={10}
+      />
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingClient ? "Editar Clienta" : "Nueva Clienta"}>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -167,6 +190,17 @@ export const Clientes: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      <ConfirmModal
+        isOpen={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Eliminar clienta"
+        message="¿Estás segura de eliminar a esta clienta? Se perderá todo su historial."
+        confirmText="Sí, eliminar"
+        cancelText="Cancelar"
+        isDestructive={true}
+      />
     </div>
   );
 };

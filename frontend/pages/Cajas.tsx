@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { deleteField } from 'firebase/firestore';
 import { Card, Button, Spinner, Modal, EmptyState, Badge, PageHeader, FormInput, Table, Thead, Tbody, Tr, Th, Td } from '../components/UI';
-import { Wallet, Plus, Lock, Unlock, AlertCircle, TrendingUp, TrendingDown, CreditCard } from 'lucide-react';
+import { Wallet, Plus, Lock, Unlock, AlertCircle, TrendingUp, TrendingDown, CreditCard, QrCode, Landmark } from 'lucide-react';
 import { useCashRegisters, useOrders } from '../hooks/useQueries';
 import { useToast } from '../contexts/ToastContext';
 import { YapeIcon, PlinIcon } from '../components/PaymentIcons';
@@ -21,7 +22,7 @@ export const Cajas: React.FC = () => {
   
   const [selectedRegister, setSelectedRegister] = useState<CashRegister | null>(null);
   const [expectedBalance, setExpectedBalance] = useState(0);
-  const [digitalStats, setDigitalStats] = useState({ yape: 0, plin: 0, tarjeta: 0, transferencia: 0 });
+  const [digitalStats, setDigitalStats] = useState({ billetera: 0, tarjeta: 0, transferencia: 0 });
 
   const handleCreateRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,17 +42,28 @@ export const Cajas: React.FC = () => {
     e.preventDefault();
     if (!selectedRegister) return;
 
-    await updateItem(selectedRegister.id, {
-      status: 'Abierta',
-      initial_balance: Number(openForm.initial_balance),
-      current_balance: Number(openForm.initial_balance),
-      opened_at: new Date().toISOString(),
-      closed_at: undefined
-    });
-    
-    addToast(`Turno abierto en ${selectedRegister.name} 🎀`, 'success');
-    setIsOpenModalOpen(false);
-    setOpenForm({ initial_balance: '' });
+    const initialBalance = Number(openForm.initial_balance);
+    if (isNaN(initialBalance) || initialBalance < 0) {
+      addToast('Ingresa una base inicial válida.', 'error');
+      return;
+    }
+
+    try {
+      await updateItem(selectedRegister.id, {
+        status: 'Abierta',
+        initial_balance: initialBalance,
+        current_balance: initialBalance,
+        opened_at: new Date().toISOString(),
+        closed_at: deleteField() as any
+      });
+      addToast(`Turno abierto en ${selectedRegister.name} 🎀`, 'success');
+      setIsOpenModalOpen(false);
+      setOpenForm({ initial_balance: '' });
+      setSelectedRegister(null);
+    } catch (error) {
+      console.error('Error al abrir turno:', error);
+      addToast('Error al abrir el turno. Revisa la consola.', 'error');
+    }
   };
 
   const handleCloseShift = async (e: React.FormEvent) => {
@@ -91,7 +103,7 @@ export const Cajas: React.FC = () => {
   };
 
   const getRegisterStats = (reg: CashRegister) => {
-    if (reg.status === 'Cerrada') return { efectivo: reg.current_balance, digital: 0, egresos: 0, yape: 0, plin: 0, tarjeta: 0, transferencia: 0 };
+    if (reg.status === 'Cerrada') return { efectivo: reg.current_balance, digital: 0, egresos: 0, billetera: 0, tarjeta: 0, transferencia: 0 };
 
     const openDate = new Date(reg.opened_at);
     const regMovements = movements.filter(m => new Date(m.created_at) >= openDate);
@@ -100,8 +112,7 @@ export const Cajas: React.FC = () => {
     const ingresosDigitales = regMovements.filter(m => m.type === 'Ingreso' && m.payment_method !== 'Efectivo').reduce((sum, m) => sum + m.amount, 0);
     const egresosEfectivo = regMovements.filter(m => m.type === 'Egreso').reduce((sum, m) => sum + m.amount, 0); 
     
-    const yape = regMovements.filter(m => m.type === 'Ingreso' && m.payment_method === 'Yape').reduce((sum, m) => sum + m.amount, 0);
-    const plin = regMovements.filter(m => m.type === 'Ingreso' && m.payment_method === 'Plin').reduce((sum, m) => sum + m.amount, 0);
+    const billetera = regMovements.filter(m => m.type === 'Ingreso' && ['Yape', 'Plin', 'Yape/Plin'].includes(m.payment_method)).reduce((sum, m) => sum + m.amount, 0);
     const tarjeta = regMovements.filter(m => m.type === 'Ingreso' && m.payment_method === 'Tarjeta').reduce((sum, m) => sum + m.amount, 0);
     const transferencia = regMovements.filter(m => m.type === 'Ingreso' && m.payment_method === 'Transferencia').reduce((sum, m) => sum + m.amount, 0);
 
@@ -109,14 +120,14 @@ export const Cajas: React.FC = () => {
       efectivo: reg.initial_balance + ingresosEfectivo - egresosEfectivo,
       digital: ingresosDigitales,
       egresos: egresosEfectivo,
-      yape, plin, tarjeta, transferencia
+      billetera, tarjeta, transferencia
     };
   };
 
   const openCloseModal = (reg: CashRegister, stats: any) => {
     setSelectedRegister(reg);
     setExpectedBalance(stats.efectivo);
-    setDigitalStats({ yape: stats.yape, plin: stats.plin, tarjeta: stats.tarjeta, transferencia: stats.transferencia });
+    setDigitalStats({ billetera: stats.billetera, tarjeta: stats.tarjeta, transferencia: stats.transferencia });
     setCloseForm({ physical_amount: stats.efectivo.toString() });
     setIsCloseModalOpen(true);
   };
@@ -223,20 +234,20 @@ export const Cajas: React.FC = () => {
       <Modal isOpen={isCloseModalOpen} onClose={() => setIsCloseModalOpen(false)} title={`Arqueo: ${selectedRegister?.name}`}>
         <form onSubmit={handleCloseShift} className="space-y-6">
           <div className="grid grid-cols-3 gap-2 mb-4">
-            <div className="bg-purple-50/80 border border-white rounded-2xl p-2 text-center shadow-sm">
-              <YapeIcon className="w-4 h-4 text-[#742284] mx-auto mb-1" />
-              <p className="text-[9px] font-bold text-plum/50 uppercase">Yape</p>
-              <p className="font-black text-plum text-sm">S/. {digitalStats.yape.toFixed(2)}</p>
-            </div>
-            <div className="bg-cyan-50/80 border border-white rounded-2xl p-2 text-center shadow-sm">
-              <PlinIcon className="w-4 h-4 text-[#00D8D6] mx-auto mb-1" />
-              <p className="text-[9px] font-bold text-plum/50 uppercase">Plin</p>
-              <p className="font-black text-plum text-sm">S/. {digitalStats.plin.toFixed(2)}</p>
+            <div className="bg-purple-50/80 border border-white rounded-2xl p-3 text-center shadow-sm">
+              <QrCode className="w-5 h-5 text-purple-600 mx-auto mb-1" />
+              <p className="text-[9px] font-bold text-plum/50 uppercase tracking-widest">Yape/Plin</p>
+              <p className="font-black text-plum text-sm">S/. {digitalStats.billetera.toFixed(2)}</p>
             </div>
             <div className="bg-blue-50/80 border border-white rounded-2xl p-2 text-center shadow-sm">
               <CreditCard className="w-4 h-4 text-blue-500 mx-auto mb-1" />
               <p className="text-[9px] font-bold text-plum/50 uppercase">Tarjeta</p>
               <p className="font-black text-plum text-sm">S/. {digitalStats.tarjeta.toFixed(2)}</p>
+            </div>
+            <div className="bg-orange-50/80 border border-white rounded-2xl p-2 text-center shadow-sm">
+              <Landmark className="w-4 h-4 text-orange-500 mx-auto mb-1" />
+              <p className="text-[9px] font-bold text-plum/50 uppercase tracking-widest">Transfer.</p>
+              <p className="font-black text-plum text-sm">S/. {digitalStats.transferencia.toFixed(2)}</p>
             </div>
           </div>
 

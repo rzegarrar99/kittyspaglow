@@ -4,6 +4,9 @@ import { Package, Plus, Trash2, Edit } from 'lucide-react';
 import { useInventory, useCategories, useBrands, useUnits } from '../hooks/useQueries';
 import { useToast } from '../contexts/ToastContext';
 import { InventoryItem } from '../types';
+import { ConfirmModal } from '../components/shared/ConfirmModal';
+import { usePagination } from '../hooks/usePagination';
+import { Pagination } from '../components/shared/Pagination';
 
 export const Productos: React.FC = () => {
   const { data: inventory, loading, addItem, updateItem, deleteItem } = useInventory();
@@ -13,6 +16,8 @@ export const Productos: React.FC = () => {
   const { addToast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
 
   const [formData, setFormData] = useState({
@@ -24,6 +29,8 @@ export const Productos: React.FC = () => {
     item.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (item.brand && item.brand.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+
+  const { paginated, currentPage, totalPages, setCurrentPage, total } = usePagination(filteredInventory, 10);
 
   const openModal = (item?: InventoryItem) => {
     if (item) {
@@ -57,11 +64,14 @@ export const Productos: React.FC = () => {
     setIsModalOpen(false);
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('¿Estás segura de eliminar este producto del catálogo?')) {
-      await deleteItem(id);
-      addToast('Producto eliminado.', 'success');
-    }
+  const handleDelete = (id: string) => {
+    setDeleteTargetId(id);
+    setConfirmOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (deleteTargetId) await deleteItem(deleteTargetId);
+    setDeleteTargetId(null);
   };
 
   return (
@@ -88,7 +98,7 @@ export const Productos: React.FC = () => {
               <Th className="text-right pr-6">Acciones</Th>
             </Thead>
             <Tbody>
-              {filteredInventory.map((item, idx) => (
+              {paginated.map((item, idx) => (
                 <Tr key={item.id} index={idx}>
                   <Td className="pl-6">
                     <div className="flex items-center gap-3">
@@ -114,6 +124,13 @@ export const Productos: React.FC = () => {
           </Table>
         )}
       </Card>
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        total={total}
+        onPageChange={setCurrentPage}
+        pageSize={10}
+      />
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingItem ? "Editar Producto" : "Nuevo Producto"}>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -149,6 +166,17 @@ export const Productos: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      <ConfirmModal
+        isOpen={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Eliminar producto"
+        message="¿Estás segura de eliminar este producto del catálogo? Esta acción no se puede deshacer."
+        confirmText="Sí, eliminar"
+        cancelText="Cancelar"
+        isDestructive={true}
+      />
     </div>
   );
 };

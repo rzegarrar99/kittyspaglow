@@ -25,7 +25,7 @@ export const Navbar: React.FC = () => {
   });
 
   return (
-    <header className="h-24 flex items-center justify-between px-8 sticky top-0 z-40">
+    <header className="h-24 flex items-center justify-between px-8 sticky top-0 z-40 bg-[#fdf2f4]/80 backdrop-blur-xl border-b border-pink-100/60 transition-shadow duration-300">
       {/* Left side: Floating Greeting & Clock */}
       <div className="flex flex-col">
         <h2 className="text-2xl font-black text-plum tracking-tight">{greetingTime}, {firstName} ✨</h2>

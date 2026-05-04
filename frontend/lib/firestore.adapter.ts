@@ -1,6 +1,8 @@
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, query, orderBy } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc, query, where, setDoc, orderBy } from 'firebase/firestore';
 import { db } from './firebase';
 import { isFirebaseConfigured } from '../config/env';
+
+const log = import.meta.env.DEV ? console.log : () => {};
 
 export const createFirestoreAdapter = <T extends { id: string }>(collectionName: string) => {
   
@@ -28,6 +30,13 @@ export const createFirestoreAdapter = <T extends { id: string }>(collectionName:
       create: async (data: Omit<T, 'id'>): Promise<T> => {
         await new Promise(res => setTimeout(res, 300));
         const newItem = { ...data, id: crypto.randomUUID(), created_at: new Date().toISOString() } as unknown as T;
+        setStored([newItem, ...getStored()]);
+        return newItem;
+      },
+      createWithId: async (id: string, data: Omit<T, 'id'>): Promise<T> => {
+        await new Promise(res => setTimeout(res, 300));
+        // En modo demo, simulamos la creación con ID manual
+        const newItem = { ...data, id, created_at: new Date().toISOString() } as unknown as T;
         setStored([newItem, ...getStored()]);
         return newItem;
       },
@@ -73,6 +82,13 @@ export const createFirestoreAdapter = <T extends { id: string }>(collectionName:
     create: async (data: Omit<T, 'id'>): Promise<T> => {
       const docRef = await addDoc(colRef, { ...data, created_at: new Date().toISOString() });
       return { id: docRef.id, ...data } as unknown as T;
+    },
+    // 🔥 Enterprise: Implementación real para Firebase
+    createWithId: async (id: string, data: Omit<T, 'id'>): Promise<T> => {
+      const docRef = doc(db, collectionName, id);
+      // Usamos setDoc para forzar que el ID del documento sea el que nosotros enviamos (el UID)
+      await setDoc(docRef, { ...data, created_at: new Date().toISOString() });
+      return { id, ...data } as unknown as T;
     },
     update: async (id: string, updates: Partial<T>): Promise<T> => {
       const docRef = doc(db, collectionName, id);

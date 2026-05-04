@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { Card, Badge, Spinner, Button, Modal, EmptyState, PageHeader, SearchBar, FormSelect, FormInput, Table, Thead, Tbody, Tr, Th, Td } from '../components/UI';
-import { AlertTriangle, Archive, ArrowRightLeft, FileText } from 'lucide-react';
+import { AlertTriangle, Archive, ArrowRightLeft, FileText, DollarSign, TrendingUp } from 'lucide-react';
 import { useInventory, useKardex } from '../hooks/useQueries';
 import { useToast } from '../contexts/ToastContext';
 import { useAuthStore } from '../stores/authStore';
 import { InventoryItem } from '../types';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { usePagination } from '../hooks/usePagination';
+import { Pagination } from '../components/shared/Pagination';
 
 export const Almacen: React.FC = () => {
   const { data: inventory, loading, updateItem } = useInventory();
@@ -25,7 +27,13 @@ export const Almacen: React.FC = () => {
     item.category.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const { paginated: paginatedInventory, currentPage, totalPages, setCurrentPage, total } = usePagination(filteredInventory, 10);
+
   const lowStockItems = inventory.filter(item => item.stock <= item.minStock);
+
+  // 💰 NIVEL ENTERPRISE: Cálculo de capital invertido en stock
+  const totalInventoryValue = inventory.reduce((sum, item) => sum + (item.stock * item.cost), 0);
+  const totalItemsCount = inventory.reduce((sum, item) => sum + item.stock, 0);
 
   const openAdjustModal = (item: InventoryItem) => {
     setAdjustingItem(item);
@@ -73,6 +81,28 @@ export const Almacen: React.FC = () => {
         subtitle="Monitorea el stock y revisa el Kardex de movimientos." 
       />
 
+      {/* KPIs de Almacén Global */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="bg-primary/5 border-primary/20 flex items-center gap-4">
+          <div className="bg-white/80 p-4 rounded-2xl border border-white shadow-sm text-primary">
+            <DollarSign className="w-8 h-8" />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-plum/50 uppercase tracking-widest">Valorización Total</p>
+            <h3 className="text-2xl font-black text-plum">S/. {totalInventoryValue.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</h3>
+          </div>
+        </Card>
+        <Card className="bg-accent/10 border-accent/30 flex items-center gap-4">
+          <div className="bg-white/80 p-4 rounded-2xl border border-white shadow-sm text-yellow-600">
+            <Archive className="w-8 h-8" />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-yellow-800/60 uppercase tracking-widest">Productos Totales</p>
+            <h3 className="text-2xl font-black text-plum">{totalItemsCount} <span className="text-xs font-bold opacity-50">unidades</span></h3>
+          </div>
+        </Card>
+      </div>
+
       {lowStockItems.length > 0 && (
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
           <Card className="bg-red-50/80 border-red-100 flex items-start gap-4">
@@ -94,7 +124,7 @@ export const Almacen: React.FC = () => {
           <SearchBar value={searchTerm} onChange={setSearchTerm} placeholder="Buscar producto o categoría..." />
         </div>
 
-        {loading ? <Spinner /> : filteredInventory.length === 0 ? <EmptyState message="No hay productos en el almacén." /> : (
+        {loading ? <Spinner /> : paginatedInventory.length === 0 && total === 0 ? <EmptyState message="No hay productos en el almacén." /> : (
           <Table>
             <Thead>
               <Th className="pl-6">Producto</Th>
@@ -104,7 +134,7 @@ export const Almacen: React.FC = () => {
               <Th className="text-right pr-6">Acciones</Th>
             </Thead>
             <Tbody>
-              {filteredInventory.map((item, idx) => {
+              {paginatedInventory.map((item, idx) => {
                 const isLowStock = item.stock <= item.minStock;
                 
                 return (
@@ -143,6 +173,7 @@ export const Almacen: React.FC = () => {
           </Table>
         )}
       </Card>
+      <Pagination currentPage={currentPage} totalPages={totalPages} total={total} onPageChange={setCurrentPage} />
 
       <Modal isOpen={isAdjustModalOpen} onClose={() => setIsAdjustModalOpen(false)} title="Ajustar Stock Manualmente">
         <form onSubmit={handleAdjustStock} className="space-y-4">

@@ -1,6 +1,5 @@
 {
   "hosting": {
-    "site": "spaglowkitty",
     "public": "dist",
     "ignore": [
       "firebase.json",
@@ -9,7 +8,7 @@
     ],
     "rewrites": [
       {
-        "source": "**",
+        "source": "/**",
         "destination": "/index.html"
       }
     ],

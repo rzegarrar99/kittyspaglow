@@ -4,6 +4,8 @@ import { Receipt, Plus, TrendingDown } from 'lucide-react';
 import { useOrders } from '../hooks/useQueries';
 import { useToast } from '../contexts/ToastContext';
 import { PaymentMethod } from '../types';
+import { usePagination } from '../hooks/usePagination';
+import { Pagination } from '../components/shared/Pagination';
 
 export const Gastos: React.FC = () => {
   const { movements, addMovement } = useOrders();
@@ -14,6 +16,8 @@ export const Gastos: React.FC = () => {
 
   const expenses = movements.filter(m => m.type === 'Egreso');
   const totalExpenses = expenses.reduce((sum, m) => sum + m.amount, 0);
+
+  const { paginated: paginatedExpenses, currentPage, totalPages, setCurrentPage, total } = usePagination(expenses, 10);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,7 +53,7 @@ export const Gastos: React.FC = () => {
       </div>
 
       <Card className="p-0 overflow-hidden">
-        {expenses.length === 0 ? (
+        {paginatedExpenses.length === 0 && total === 0 ? (
           <EmptyState message="No hay gastos registrados aún." />
         ) : (
           <Table>
@@ -61,7 +65,7 @@ export const Gastos: React.FC = () => {
               <Th className="text-right pr-6">Monto</Th>
             </Thead>
             <Tbody>
-              {expenses.map((expense, idx) => (
+              {paginatedExpenses.map((expense, idx) => (
                 <Tr key={expense.id} index={idx}>
                   <Td className="pl-6 font-semibold text-plum/80">
                     {new Date(expense.created_at).toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' })}
@@ -83,6 +87,7 @@ export const Gastos: React.FC = () => {
           </Table>
         )}
       </Card>
+      <Pagination currentPage={currentPage} totalPages={totalPages} total={total} onPageChange={setCurrentPage} />
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Registrar Nuevo Gasto">
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -93,8 +98,7 @@ export const Gastos: React.FC = () => {
               <option value="Efectivo">Efectivo (Caja)</option>
               <option value="Transferencia">Transferencia (Banco)</option>
               <option value="Tarjeta">Tarjeta (Banco)</option>
-              <option value="Yape">Yape (Banco)</option>
-              <option value="Plin">Plin (Banco)</option>
+              <option value="Yape/Plin">Yape/Plin</option>
             </FormSelect>
           </div>
           <div className="pt-4 flex justify-end gap-3">

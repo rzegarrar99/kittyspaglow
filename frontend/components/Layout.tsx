@@ -23,10 +23,8 @@ export const Layout: React.FC = () => {
         className="flex-1 flex flex-col min-h-screen"
       >
         <Navbar />
-        <main className="flex-1 px-8 pb-8 pt-2">
-          <div className="max-w-7xl mx-auto">
-            <Outlet />
-          </div>
+        <main className="flex-1 px-6 pb-8 pt-2">
+          <Outlet />
         </main>
       </motion.div>
     </div>

@@ -5,10 +5,14 @@ import { useToast } from '../contexts/ToastContext';
 import { CrudPage } from '../components/shared/CrudPage';
 import { FormInput, Badge } from '../components/UI';
 import { Unit } from '../types';
+import { usePagination } from '../hooks/usePagination';
+import { Pagination } from '../components/shared/Pagination';
 
 export const Unidades: React.FC = () => {
   const { data, loading, addItem, updateItem, deleteItem } = useUnits();
   const { addToast } = useToast();
+
+  const { paginated, currentPage, totalPages, setCurrentPage, total } = usePagination(data, 10);
 
   const handleAdd = async (formData: any) => {
     await addItem(formData);
@@ -26,12 +30,13 @@ export const Unidades: React.FC = () => {
   };
 
   return (
+    <>
     <CrudPage<Unit>
       title="Unidades de Medida"
       subtitle="Unidades para el control de inventario."
       icon={Box}
       itemName="Unidad"
-      data={data}
+      data={paginated}
       loading={loading}
       searchKeys={['name', 'abbreviation']}
       onAdd={handleAdd}
@@ -61,5 +66,13 @@ export const Unidades: React.FC = () => {
         </>
       )}
     />
+    <Pagination
+      currentPage={currentPage}
+      totalPages={totalPages}
+      total={total}
+      onPageChange={setCurrentPage}
+      pageSize={10}
+    />
+    </>
   );
 };

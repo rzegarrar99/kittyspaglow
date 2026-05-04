@@ -5,10 +5,14 @@ import { useToast } from '../contexts/ToastContext';
 import { CrudPage } from '../components/shared/CrudPage';
 import { FormInput, FormSelect, Badge } from '../components/UI';
 import { Area } from '../types';
+import { usePagination } from '../hooks/usePagination';
+import { Pagination } from '../components/shared/Pagination';
 
 export const Areas: React.FC = () => {
   const { data, loading, addItem, updateItem, deleteItem } = useAreas();
   const { addToast } = useToast();
+
+  const { paginated, currentPage, totalPages, setCurrentPage, total } = usePagination(data, 10);
 
   const handleAdd = async (formData: any) => {
     await addItem(formData);
@@ -26,12 +30,13 @@ export const Areas: React.FC = () => {
   };
 
   return (
+    <>
     <CrudPage<Area>
       title="Áreas del Spa"
       subtitle="Salas y espacios de atención."
       icon={MapPin}
       itemName="Área"
-      data={data}
+      data={paginated}
       loading={loading}
       searchKeys={['name']}
       onAdd={handleAdd}
@@ -77,5 +82,13 @@ export const Areas: React.FC = () => {
         </>
       )}
     />
+    <Pagination
+      currentPage={currentPage}
+      totalPages={totalPages}
+      total={total}
+      onPageChange={setCurrentPage}
+      pageSize={10}
+    />
+    </>
   );
 };

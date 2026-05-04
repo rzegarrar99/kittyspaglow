@@ -1,4 +1,4 @@
-export type PaymentMethod = 'Efectivo' | 'Yape' | 'Plin' | 'Tarjeta' | 'Transferencia';
+export type PaymentMethod = 'Efectivo' | 'Yape' | 'Plin' | 'Tarjeta' | 'Transferencia' | 'Yape/Plin';
 
 export interface PaymentDetail {
   method: PaymentMethod;
@@ -37,6 +37,7 @@ export interface Role {
 export interface Staff {
   id: string;
   name: string;
+  username: string;
   email: string;
   roles: Role[]; // Discord-style multiple roles. Highest priority = Main Role
   commission_rate: number;

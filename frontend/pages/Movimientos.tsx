@@ -1,11 +1,15 @@
 import React from 'react';
 import { Card, Badge, EmptyState, PageHeader, Table, Thead, Tbody, Tr, Th, Td } from '../components/UI';
-import { ArrowRightLeft, TrendingUp, TrendingDown, Wallet, Banknote, CreditCard, Landmark } from 'lucide-react';
+import { ArrowRightLeft, TrendingUp, TrendingDown, Wallet, Banknote, CreditCard, Landmark, QrCode } from 'lucide-react';
 import { useOrders } from '../hooks/useQueries';
 import { YapeIcon, PlinIcon } from '../components/PaymentIcons';
+import { usePagination } from '../hooks/usePagination';
+import { Pagination } from '../components/shared/Pagination';
 
 export const Movimientos: React.FC = () => {
   const { movements = [] } = useOrders();
+
+  const { paginated: paginatedMovements, currentPage, totalPages, setCurrentPage, total } = usePagination(movements, 10);
 
   const totalIngresos = movements.filter(m => m.type === 'Ingreso').reduce((sum, m) => sum + (m.amount || 0), 0);
   const totalEgresos = movements.filter(m => m.type === 'Egreso').reduce((sum, m) => sum + (m.amount || 0), 0);
@@ -14,8 +18,9 @@ export const Movimientos: React.FC = () => {
   const getPaymentIcon = (method: string) => {
     switch (method) {
       case 'Efectivo': return <Banknote className="w-3 h-3" />;
-      case 'Yape': return <YapeIcon className="w-3 h-3" />;
-      case 'Plin': return <PlinIcon className="w-3 h-3" />;
+      case 'Yape/Plin':
+      case 'Yape':
+      case 'Plin': return <QrCode className="w-3 h-3 text-primary" />;
       case 'Tarjeta': return <CreditCard className="w-3 h-3" />;
       case 'Transferencia': return <Landmark className="w-3 h-3" />;
       default: return <Wallet className="w-3 h-3" />;
@@ -60,7 +65,7 @@ export const Movimientos: React.FC = () => {
       </div>
 
       <Card className="p-0 overflow-hidden">
-        {movements.length === 0 ? (
+        {total === 0 ? (
           <EmptyState message="No hay movimientos registrados." />
         ) : (
           <Table>
@@ -72,7 +77,7 @@ export const Movimientos: React.FC = () => {
               <Th className="text-right pr-6">Monto</Th>
             </Thead>
             <Tbody>
-              {movements.map((mov, idx) => (
+              {paginatedMovements.map((mov, idx) => (
                 <Tr key={mov.id} index={idx}>
                   <Td className="pl-6 font-semibold text-plum/80">
                     {new Date(mov.created_at).toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' })}
@@ -100,6 +105,7 @@ export const Movimientos: React.FC = () => {
           </Table>
         )}
       </Card>
+      <Pagination currentPage={currentPage} totalPages={totalPages} total={total} onPageChange={setCurrentPage} />
     </div>
   );
 };

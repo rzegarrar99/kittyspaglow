@@ -11,6 +11,16 @@ import { KittyIcon } from '../components/KittyIcon';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 
+// Retorna 'YYYY-MM-DD' en zona horaria Lima (UTC-5)
+const getTodayLima = () => {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+};
+
+// Convierte un ISO string a fecha Lima para comparar
+const toDateLima = (isoString: string) => {
+  return new Date(isoString).toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+};
+
 export const Dashboard: React.FC = () => {
   const { orders, movements } = useOrders();
   const { clients, loading: loadingClients } = useClients();
@@ -24,10 +34,12 @@ export const Dashboard: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  const today = new Date().toISOString().split('T')[0];
-  
-  const todaySales = useMemo(() => 
-    orders.filter(o => o.created_at.startsWith(today)).reduce((sum, o) => sum + o.total, 0)
+  const today = getTodayLima();
+
+  const todaySales = useMemo(() =>
+    orders
+      .filter(o => toDateLima(o.created_at) === today)
+      .reduce((sum, o) => sum + o.total, 0)
   , [orders, today]);
 
   const totalCashFlow = useMemo(() => 
@@ -35,7 +47,7 @@ export const Dashboard: React.FC = () => {
   , [movements]);
 
   const newClients = useMemo(() => 
-    clients.filter(c => c.created_at?.startsWith(today)).length
+    clients.filter(c => c.created_at && toDateLima(c.created_at) === today).length
   , [clients, today]);
 
   const weeklySalesData = useMemo(() => {
@@ -45,12 +57,7 @@ export const Dashboard: React.FC = () => {
       const date = new Date(o.created_at);
       data[date.getDay()].value += o.total;
     });
-    if (orders.length === 0) {
-      return [
-        { name: 'Lun', value: 1200 }, { name: 'Mar', value: 1900 }, { name: 'Mié', value: 1500 },
-        { name: 'Jue', value: 2200 }, { name: 'Vie', value: 3500 }, { name: 'Sáb', value: 4800 }, { name: 'Dom', value: 3100 }
-      ];
-    }
+    // Si no hay órdenes, devuelve array en cero (sin datos falsos)
     return data;
   }, [orders]);
 
@@ -61,20 +68,33 @@ export const Dashboard: React.FC = () => {
         itemCounts[item.name] = (itemCounts[item.name] || 0) + (item.quantity || 1);
       });
     });
-    
-    const sorted = Object.entries(itemCounts)
+    return Object.entries(itemCounts)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
-      
-    return sorted;
   }, [orders]);
 
+  // Calcular trends reales vs semana anterior
+  const lastWeekSales = useMemo(() => {
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const weekAgoDate = weekAgo.toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+    return orders
+      .filter(o => toDateLima(o.created_at) === weekAgoDate)
+      .reduce((sum, o) => sum + o.total, 0);
+  }, [orders]);
+
+  const salesTrend = useMemo(() => {
+    if (lastWeekSales === 0) return null;
+    const pct = ((todaySales - lastWeekSales) / lastWeekSales) * 100;
+    return `${pct >= 0 ? '+' : ''}${pct.toFixed(0)}%`;
+  }, [todaySales, lastWeekSales]);
+
   const kpis = [
-    { title: 'Ventas del Día', value: `S/. ${todaySales.toFixed(2)}`, trend: '+15%', icon: DollarSign, color: 'text-primary', bg: 'bg-primary/10' },
-    { title: 'Órdenes Hoy', value: orders.filter(o => o.created_at.startsWith(today)).length.toString(), trend: '+5%', icon: CalendarHeart, color: 'text-accent', bg: 'bg-accent/10' },
-    { title: 'Nuevos Clientes', value: newClients.toString(), trend: '+12%', icon: Users, color: 'text-secondary', bg: 'bg-secondary/20' },
-    { title: 'Flujo de Caja', value: `S/. ${totalCashFlow.toFixed(2)}`, trend: '+8%', icon: TrendingUp, color: 'text-green-500', bg: 'bg-green-100' },
+    { title: 'Ventas del Día', value: `S/. ${todaySales.toFixed(2)}`, trend: salesTrend, icon: DollarSign, color: 'text-primary', bg: 'bg-primary/10' },
+    { title: 'Órdenes Hoy', value: orders.filter(o => toDateLima(o.created_at) === today).length.toString(), trend: null, icon: CalendarHeart, color: 'text-accent', bg: 'bg-accent/10' },
+    { title: 'Nuevos Clientes', value: newClients.toString(), trend: null, icon: Users, color: 'text-secondary', bg: 'bg-secondary/20' },
+    { title: 'Flujo de Caja', value: `S/. ${totalCashFlow.toFixed(2)}`, trend: null, icon: TrendingUp, color: 'text-green-500', bg: 'bg-green-100' },
   ];
 
   const hour = currentTime.getHours();
@@ -122,6 +142,9 @@ export const Dashboard: React.FC = () => {
                 <p className="text-[10px] font-bold text-plum/50 uppercase tracking-widest">{kpi.title}</p>
                 <div className="flex items-baseline gap-2 mt-0.5">
                   <h3 className="text-2xl font-extrabold text-plum">{kpi.value}</h3>
+                  {kpi.trend && (
+                    <span className="text-xs font-black text-green-500">{kpi.trend}</span>
+                  )}
                 </div>
               </div>
             </Card>
@@ -135,26 +158,30 @@ export const Dashboard: React.FC = () => {
             <TrendingUp className="w-5 h-5 text-primary" />
             Ventas Semanales (S/.)
           </h3>
-          <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={weeklySalesData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#FF2A7A" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#FF2A7A" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#2D1B2E" strokeOpacity={0.05} />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#2D1B2E', fontWeight: 700, opacity: 0.6 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#2D1B2E', fontWeight: 700, opacity: 0.6 }} />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 40px -10px rgba(255, 42, 122, 0.15)', backgroundColor: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(8px)' }}
-                  itemStyle={{ color: '#FF2A7A', fontWeight: '800' }}
-                />
-                <Area type="monotone" dataKey="value" stroke="#FF2A7A" strokeWidth={4} fill="url(#colorSales)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+          {orders.length === 0 ? (
+            <EmptyState message="Aún no hay ventas para mostrar." />
+          ) : (
+            <div className="h-[300px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={weeklySalesData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#FF2A7A" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#FF2A7A" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#2D1B2E" strokeOpacity={0.05} />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#2D1B2E', fontWeight: 700, opacity: 0.6 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#2D1B2E', fontWeight: 700, opacity: 0.6 }} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 40px -10px rgba(255, 42, 122, 0.15)', backgroundColor: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(8px)' }}
+                    itemStyle={{ color: '#FF2A7A', fontWeight: '800' }}
+                  />
+                  <Area type="monotone" dataKey="value" stroke="#FF2A7A" strokeWidth={4} fill="url(#colorSales)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </Card>
 
         <Card>

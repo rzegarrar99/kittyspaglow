@@ -5,6 +5,9 @@ import { useRoles } from '../hooks/useQueries';
 import { useToast } from '../contexts/ToastContext';
 import { Role } from '../types';
 import { AVAILABLE_PERMISSIONS } from '../constants';
+import { ConfirmModal } from '../components/shared/ConfirmModal';
+import { usePagination } from '../hooks/usePagination';
+import { Pagination } from '../components/shared/Pagination';
 
 export const Roles: React.FC = () => {
   const { data: roles, loading, addItem, updateItem, deleteItem } = useRoles();
@@ -12,6 +15,8 @@ export const Roles: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: '', color: '#FF2A7A' });
   const [selectedPerms, setSelectedPerms] = useState<string[]>([]);
 
@@ -23,6 +28,8 @@ export const Roles: React.FC = () => {
     });
     return groups;
   }, []);
+
+  const { paginated: paginatedRoles, currentPage, totalPages, setCurrentPage, total } = usePagination([...roles].sort((a, b) => b.priority - a.priority), 10);
 
   const openModal = (role?: Role) => {
     if (role) {
@@ -53,30 +60,49 @@ export const Roles: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const calculatedPriority = selectedPerms.includes('*') ? 1000 : selectedPerms.length * 10;
+    try {
+      const calculatedPriority = selectedPerms.includes('*') ? 1000 : selectedPerms.length * 10;
 
-    const payload = {
-      name: formData.name,
-      color: formData.color,
-      priority: calculatedPriority,
-      permissions: selectedPerms
-    };
+      const payload = {
+        name: formData.name,
+        color: formData.color,
+        priority: calculatedPriority,
+        permissions: selectedPerms
+      };
 
-    if (editingRole) {
-      await updateItem(editingRole.id, payload);
-      addToast('Rol actualizado con éxito 🎀', 'success');
-    } else {
-      await addItem(payload);
-      addToast('Rol creado con éxito 🎀', 'success');
+      if (editingRole) {
+        await updateItem(editingRole.id, payload);
+        addToast('Rol actualizado con éxito 🎀', 'success');
+      } else {
+        await addItem(payload);
+        addToast('Rol creado con éxito 🎀', 'success');
+      }
+      setIsModalOpen(false);
+    } catch (error: any) {
+      console.error("Error al guardar rol:", error);
+      addToast(
+        error.message?.includes('permissions') 
+          ? 'Error: No tienes permisos en Firebase para crear roles. 🔒' 
+          : 'Ocurrió un error al procesar el rol.', 
+        'error'
+      );
     }
-    setIsModalOpen(false);
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('¿Estás segura de eliminar este rol? Los usuarios con este rol perderán sus permisos.')) {
-      await deleteItem(id);
+    setDeleteTargetId(id);
+    setConfirmOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTargetId) return;
+    try {
+      await deleteItem(deleteTargetId);
       addToast('Rol eliminado.', 'success');
+    } catch {
+      addToast('No se pudo eliminar el rol. Revisa los permisos.', 'error');
     }
+    setDeleteTargetId(null);
   };
 
   const isAdmin = selectedPerms.includes('*');
@@ -99,7 +125,7 @@ export const Roles: React.FC = () => {
               <Th className="text-right pr-6">Acciones</Th>
             </Thead>
             <Tbody>
-              {roles.sort((a, b) => b.priority - a.priority).map((role, idx) => (
+              {paginatedRoles.map((role, idx) => (
                 <Tr key={role.id} index={idx}>
                   <Td className="pl-6">
                     <div className="flex items-center gap-3">
@@ -131,6 +157,7 @@ export const Roles: React.FC = () => {
           </Table>
         )}
       </Card>
+      <Pagination currentPage={currentPage} totalPages={totalPages} total={total} onPageChange={setCurrentPage} />
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingRole ? "Editar Rol" : "Nuevo Rol"} maxWidth="max-w-3xl">
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -179,6 +206,17 @@ export const Roles: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      <ConfirmModal
+        isOpen={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Eliminar rol"
+        message="¿Estás segura de eliminar este rol? Los usuarios con este rol perderán sus permisos."
+        confirmText="Sí, eliminar"
+        cancelText="Cancelar"
+        isDestructive={true}
+      />
     </div>
   );
 };

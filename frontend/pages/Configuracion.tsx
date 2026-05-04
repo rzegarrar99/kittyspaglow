@@ -6,12 +6,15 @@ import { useSettings } from '../contexts/SettingsContext';
 import { categoryService, brandService, unitService } from '../services/inventory.service';
 import { areaService } from '../services/operations.service';
 import { motion } from 'framer-motion';
+import { ConfirmModal } from '../components/shared/ConfirmModal';
+import { runFullSeed } from '../lib/seedData';
 
 export const Configuracion: React.FC = () => {
   const { addToast } = useToast();
   const { settings, updateSettings } = useSettings();
   const [isSaving, setIsSaving] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
+  const [confirmSeedOpen, setConfirmSeedOpen] = useState(false);
 
   const [formData, setFormData] = useState({
     spaName: '',
@@ -47,27 +50,17 @@ export const Configuracion: React.FC = () => {
     }, 800);
   };
 
-  const handleSeedDatabase = async () => {
-    if (!window.confirm('¿Estás segura de inyectar datos de prueba? Solo hazlo si tu base de datos está vacía.')) return;
-    
+  const handleSeedDatabase = () => {
+    setConfirmSeedOpen(true);
+  };
+
+  const handleConfirmSeed = async () => {
     setIsSeeding(true);
     try {
-      await categoryService.create({ name: 'Faciales', description: 'Tratamientos para el rostro' });
-      await categoryService.create({ name: 'Masajes', description: 'Relajación corporal' });
-      await categoryService.create({ name: 'Manicura', description: 'Cuidado de manos y uñas' });
-
-      await brandService.create({ name: 'Glow Beauty', description: 'Línea premium', origin: 'Francia' });
-      await brandService.create({ name: 'Kitty Cosmetics', description: 'Accesorios coquette', origin: 'Japón' });
-
-      await unitService.create({ name: 'Mililitros', abbreviation: 'ml' });
-      await unitService.create({ name: 'Unidades', abbreviation: 'und' });
-
-      await areaService.create({ name: 'Sala VIP 1', capacity: 1, status: 'Disponible' });
-      await areaService.create({ name: 'Cabina Masajes', capacity: 2, status: 'Disponible' });
-
-      addToast('¡Base de datos poblada con éxito! Recarga la página. 🎀', 'success');
+      await runFullSeed();
+      addToast('✅ ¡800 registros creados! 100 por cada colección. Recarga la página 🎀', 'success');
     } catch (error) {
-      console.error(error);
+      console.error('Error al poblar:', error);
       addToast('Error al poblar la base de datos.', 'error');
     } finally {
       setIsSeeding(false);
@@ -121,6 +114,17 @@ export const Configuracion: React.FC = () => {
           </Button>
         </div>
       </form>
+
+      <ConfirmModal
+        isOpen={confirmSeedOpen}
+        onClose={() => setConfirmSeedOpen(false)}
+        onConfirm={handleConfirmSeed}
+        title="Inyectar datos de prueba"
+        message="¿Estás segura de inyectar datos de prueba? Solo hazlo si tu base de datos está vacía."
+        confirmText="Sí, inyectar"
+        cancelText="Cancelar"
+        isDestructive={true}
+      />
     </div>
   );
 };

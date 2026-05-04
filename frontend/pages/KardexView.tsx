@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Badge, Spinner, Button, EmptyState, PageHeader, Table, Thead, Tbody, Tr, Th, Td } from '../components/UI';
-import { ArrowLeft, Download, TrendingUp, TrendingDown, Package, Calendar, User, DollarSign } from 'lucide-react';
+import { ArrowLeft, Download, TrendingUp, TrendingDown, Package, Calendar, User, DollarSign, ShoppingCart, Receipt, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { useInventory, useKardex } from '../hooks/useQueries';
 import { exportToCSV } from '../utils/exportUtils';
 import { motion } from 'framer-motion';
+import { usePagination } from '../hooks/usePagination';
+import { Pagination } from '../components/shared/Pagination';
 
 export const KardexView: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -30,24 +32,40 @@ export const KardexView: React.FC = () => {
     return true;
   });
 
+  const { paginated: paginatedKardex, currentPage, totalPages, setCurrentPage, total } = usePagination(filteredKardex, 15);
+
   const totalIngresos = filteredKardex.filter(k => k.type === 'Ingreso').reduce((sum, k) => sum + k.quantity, 0);
   const totalSalidas = filteredKardex.filter(k => k.type === 'Salida').reduce((sum, k) => sum + k.quantity, 0);
   const valorizacionActual = item ? item.stock * item.cost : 0;
+  const rotationRatio = (totalSalidas / (item?.stock || 1)).toFixed(1);
 
   const handleExport = () => {
     const exportData = filteredKardex.map(k => ({
+      ID_Operacion: k.id.slice(-8).toUpperCase(),
       Fecha: new Date(k.date).toLocaleString('es-PE'),
       Usuario: k.staff_name,
       Motivo: k.reason,
       Referencia: k.reference,
       Tipo: k.type,
-      Cantidad: k.quantity,
-      'Costo Unit.': k.unit_cost,
-      'Costo Total': k.total_cost,
+      'Cant. Entrada': k.type === 'Ingreso' ? k.quantity : 0,
+      'Cant. Salida': k.type === 'Salida' ? k.quantity : 0,
+      'C.Unit.': k.unit_cost,
+      'Total Entrada': k.type === 'Ingreso' ? k.total_cost : 0,
+      'Total Salida': k.type === 'Salida' ? k.total_cost : 0,
       'Saldo Físico': k.balance,
-      'Valor Saldo': k.balance * k.unit_cost
+      'Valor Stock': k.balance * k.unit_cost,
+      Salud: k.balance === 0 ? 'AGOTADO' : k.balance <= 10 ? 'BAJO' : 'SUFICIENTE'
     }));
     exportToCSV(`kardex_valorizado_${item?.name?.replace(/\s+/g, '_') || 'producto'}.csv`, exportData);
+  };
+
+  // Helper para identificar el origen del movimiento
+  const getSourceIcon = (reason: string) => {
+    const r = reason.toLowerCase();
+    if (r.includes('venta')) return <Receipt className="w-3 h-3 text-primary" />;
+    if (r.includes('compra') || r.includes('proveedor')) return <ShoppingCart className="w-3 h-3 text-green-500" />;
+    if (r.includes('inicial')) return <ShieldCheck className="w-3 h-3 text-accent" />;
+    return <Package className="w-3 h-3 text-plum/40" />;
   };
 
   if (loadingInv || loadingKardex) return <Spinner />;
@@ -79,7 +97,7 @@ export const KardexView: React.FC = () => {
       </div>
 
       {/* KPIs del Kardex */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
         <Card className="bg-green-50/80 border-green-100 flex items-center gap-4">
           <div className="bg-white/80 p-3 rounded-2xl border border-white shadow-sm text-green-500">
             <TrendingUp className="w-6 h-6" />
@@ -114,6 +132,15 @@ export const KardexView: React.FC = () => {
           <div>
             <p className="text-[10px] font-bold text-yellow-800/60 uppercase tracking-widest">Valorización</p>
             <h3 className="text-xl font-extrabold text-yellow-700">S/. {valorizacionActual.toFixed(2)}</h3>
+          </div>
+        </Card>
+        <Card className="bg-orange-50/80 border-orange-100 flex items-center gap-4">
+          <div className="bg-white/80 p-3 rounded-2xl border border-white shadow-sm text-orange-500">
+            <AlertTriangle className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-[10px] font-bold text-orange-800/60 uppercase tracking-widest">Rotación</p>
+            <h3 className="text-xl font-extrabold text-orange-600">{rotationRatio}x</h3>
           </div>
         </Card>
       </div>
@@ -159,28 +186,48 @@ export const KardexView: React.FC = () => {
           </div>
         </div>
 
-        {filteredKardex.length === 0 ? (
+        {paginatedKardex.length === 0 && total === 0 ? (
           <EmptyState message="No hay movimientos para los filtros seleccionados." />
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto bg-white/30">
             <table className="w-full text-left border-collapse whitespace-nowrap">
-              <thead>
-                <tr className="text-plum/50 text-[10px] uppercase tracking-widest font-bold border-b border-pink-100 bg-white/50">
-                  <th className="p-4 pl-6">Fecha</th>
-                  <th className="p-4">Usuario</th>
-                  <th className="p-4">Detalle (Motivo / Ref)</th>
-                  <th className="p-4">Tipo</th>
-                  <th className="p-4 text-right">Cant.</th>
-                  <th className="p-4 text-right">C. Unit.</th>
-                  <th className="p-4 text-right">C. Total</th>
-                  <th className="p-4 text-right">Saldo Físico</th>
-                  <th className="p-4 text-right pr-6">Valor Saldo</th>
+              <thead className="sticky top-0 z-10">
+                <tr className="text-plum/50 text-[10px] uppercase tracking-widest font-bold bg-white/50">
+                  <th className="p-4 pl-6 border-b border-pink-100" rowSpan={2}># Operación</th>
+                  <th className="p-4 border-b border-pink-100" rowSpan={2}>Fecha / Hora</th>
+                  <th className="p-4 border-b border-pink-100" rowSpan={2}>Usuario</th>
+                  <th className="p-4 border-b border-pink-100" rowSpan={2}>Motivo / Documento</th>
+                  <th className="p-4 border-b border-pink-100" rowSpan={2}>Tipo</th>
+                  <th className="text-center text-[10px] font-black tracking-widest text-green-500 pb-1 border-b-2 border-green-200" colSpan={3}>ENTRADA</th>
+                  <th className="text-center text-[10px] font-black tracking-widest text-red-400 pb-1 border-b-2 border-red-200" colSpan={3}>SALIDA</th>
+                  <th className="text-center text-[10px] font-black tracking-widest text-primary pb-1 border-b-2 border-primary/40" colSpan={3}>EXISTENCIAS</th>
+                  <th className="p-4 text-center border-b border-pink-100" rowSpan={2}>Salud Stock</th>
+                </tr>
+                <tr className="text-plum/50 text-[9px] uppercase tracking-widest font-bold border-b border-pink-100 bg-white/50">
+                  <th className="text-center text-[9px] font-bold tracking-widest text-plum/30 pt-1 pb-3">Cant.</th>
+                  <th className="text-center text-[9px] font-bold tracking-widest text-plum/30 pt-1 pb-3">C. Unit.</th>
+                  <th className="text-center text-[9px] font-bold tracking-widest text-plum/30 pt-1 pb-3">Total</th>
+                  <th className="text-center text-[9px] font-bold tracking-widest text-plum/30 pt-1 pb-3">Cant.</th>
+                  <th className="text-center text-[9px] font-bold tracking-widest text-plum/30 pt-1 pb-3">C. Unit.</th>
+                  <th className="text-center text-[9px] font-bold tracking-widest text-plum/30 pt-1 pb-3">Total</th>
+                  <th className="text-center text-[9px] font-bold tracking-widest text-plum/30 pt-1 pb-3">Cant.</th>
+                  <th className="text-center text-[9px] font-bold tracking-widest text-plum/30 pt-1 pb-3">C. Unit.</th>
+                  <th className="text-center text-[9px] font-bold tracking-widest text-plum/30 pt-1 pb-3">Valor Total</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-pink-50">
-                {filteredKardex.map((k, idx) => (
-                  <Tr key={k.id} index={idx}>
-                    <Td className="pl-6 text-xs font-semibold text-plum/80">
+                {paginatedKardex.map((k, idx) => (
+                  <Tr 
+                    key={k.id} 
+                    index={idx}
+                    className="group border-b border-pink-50/80 hover:bg-white/70 transition-all duration-200"
+                  >
+                    <Td className="pl-6">
+                      <span className="font-mono text-[10px] bg-pink-50 text-plum/40 px-2 py-1 rounded-lg border border-pink-100">
+                        {k.id.slice(0, 8).toUpperCase()}
+                      </span>
+                    </Td>
+                    <Td className="text-xs font-semibold text-plum/80">
                       {new Date(k.date).toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' })}
                     </Td>
                     <Td>
@@ -190,20 +237,65 @@ export const KardexView: React.FC = () => {
                     </Td>
                     <Td>
                       <div className="flex flex-col">
-                        <span className="text-xs font-bold text-plum">{k.reason}</span>
+                        <div className="flex items-center gap-1.5">
+                          {getSourceIcon(k.reason)}
+                          <span className="text-xs font-bold text-plum">{k.reason}</span>
+                        </div>
                         <span className="text-[10px] font-semibold text-plum/50">{k.reference}</span>
                       </div>
                     </Td>
-                    <Td>
-                      <Badge variant={k.type === 'Ingreso' ? 'pink' : 'gray'}>{k.type}</Badge>
+                    <Td className="text-center">
+                      {k.type === 'Ingreso' ? (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black tracking-widest bg-green-50 text-green-600 border border-green-100">↑ INGRESO</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black tracking-widest bg-red-50 text-red-400 border border-red-100">↓ SALIDA</span>
+                      )}
                     </Td>
-                    <Td className={`text-right font-extrabold text-sm ${k.type === 'Ingreso' ? 'text-green-500' : 'text-red-500'}`}>
-                      {k.type === 'Ingreso' ? '+' : '-'}{k.quantity}
+                    {/* ENTRADA */}
+                    <Td className="text-center text-xs font-black text-green-500">
+                      {k.type === 'Ingreso' ? `+${k.quantity}` : <span className="text-plum/20 text-xs select-none">—</span>}
                     </Td>
-                    <Td className="text-right text-xs font-bold text-plum/70">S/. {k.unit_cost.toFixed(2)}</Td>
-                    <Td className="text-right text-xs font-bold text-plum/70">S/. {k.total_cost.toFixed(2)}</Td>
-                    <Td className="text-right font-black text-plum text-sm">{k.balance}</Td>
-                    <Td className="pr-6 text-right font-black text-primary text-sm">S/. {(k.balance * k.unit_cost).toFixed(2)}</Td>
+                    <Td className="text-center text-xs font-black text-green-500">
+                      {k.type === 'Ingreso' ? `S/. ${k.unit_cost.toFixed(2)}` : <span className="text-plum/20 text-xs select-none">—</span>}
+                    </Td>
+                    <Td className="text-center text-xs font-black text-green-500">
+                      {k.type === 'Ingreso' ? `S/. ${k.total_cost.toFixed(2)}` : <span className="text-plum/20 text-xs select-none">—</span>}
+                    </Td>
+                    {/* SALIDA */}
+                    <Td className="text-center text-xs font-black text-red-400">
+                      {k.type === 'Salida' ? `-${k.quantity}` : <span className="text-plum/20 text-xs select-none">—</span>}
+                    </Td>
+                    <Td className="text-center text-xs font-black text-red-400">
+                      {k.type === 'Salida' ? `S/. ${k.unit_cost.toFixed(2)}` : <span className="text-plum/20 text-xs select-none">—</span>}
+                    </Td>
+                    <Td className="text-center text-xs font-black text-red-400">
+                      {k.type === 'Salida' ? `S/. ${k.total_cost.toFixed(2)}` : <span className="text-plum/20 text-xs select-none">—</span>}
+                    </Td>
+                    {/* EXISTENCIAS */}
+                    <Td className="text-center text-sm font-black text-plum">
+                      {k.balance}
+                    </Td>
+                    <Td className="text-center text-xs font-bold text-primary">
+                      S/. {k.unit_cost.toFixed(2)}
+                    </Td>
+                    <Td className="text-center text-xs font-bold text-primary">
+                      S/. {(k.balance * k.unit_cost).toFixed(2)}
+                    </Td>
+                    <Td className="text-center">
+                      {k.balance === 0 ? (
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black tracking-widest bg-red-100 text-red-500 border border-red-200">
+                          AGOTADO
+                        </span>
+                      ) : k.balance <= 10 ? (
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black tracking-widest bg-orange-100 text-orange-700 border border-orange-200">
+                          BAJO
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black tracking-widest bg-green-100 text-green-700 border border-green-200">
+                          SUFICIENTE
+                        </span>
+                      )}
+                    </Td>
                   </Tr>
                 ))}
               </tbody>
@@ -211,6 +303,7 @@ export const KardexView: React.FC = () => {
           </div>
         )}
       </Card>
+      <Pagination currentPage={currentPage} totalPages={totalPages} total={total} onPageChange={setCurrentPage} />
     </div>
   );
 };

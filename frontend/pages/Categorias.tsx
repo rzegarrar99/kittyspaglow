@@ -5,10 +5,14 @@ import { useToast } from '../contexts/ToastContext';
 import { CrudPage } from '../components/shared/CrudPage';
 import { FormInput } from '../components/UI';
 import { SimpleDictionary } from '../types';
+import { usePagination } from '../hooks/usePagination';
+import { Pagination } from '../components/shared/Pagination';
 
 export const Categorias: React.FC = () => {
   const { data, loading, addItem, updateItem, deleteItem } = useCategories();
   const { addToast } = useToast();
+
+  const { paginated, currentPage, totalPages, setCurrentPage, total } = usePagination(data, 10);
 
   const handleAdd = async (formData: any) => {
     await addItem(formData);
@@ -26,12 +30,13 @@ export const Categorias: React.FC = () => {
   };
 
   return (
+    <>
     <CrudPage<SimpleDictionary>
       title="Categorías"
       subtitle="Clasificación de productos y servicios."
       icon={BookOpen}
       itemName="Categoría"
-      data={data}
+      data={paginated}
       loading={loading}
       searchKeys={['name', 'description']}
       onAdd={handleAdd}
@@ -60,5 +65,13 @@ export const Categorias: React.FC = () => {
         </>
       )}
     />
+    <Pagination
+      currentPage={currentPage}
+      totalPages={totalPages}
+      total={total}
+      onPageChange={setCurrentPage}
+      pageSize={10}
+    />
+    </>
   );
 };
